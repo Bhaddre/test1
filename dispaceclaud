@@ -1,0 +1,40 @@
+# Import required modules
+Import-Module Citrix.*.V2
+
+# Set the Citrix Delivery Controller address
+$ddcHostName = "citrix-ddc.example.com"
+
+# Get the list of VDI target devices
+$machines = Get-BrokerMachine -AdminAddress $ddcHostName
+
+# Loop through each machine
+foreach ($machine in $machines) {
+    # Get the machine name and DNS name
+    $machineName = $machine.MachineName
+    $dnsName = $machine.DNSName
+
+    # Check if the machine is powered on
+    if ($machine.PowerState -eq "On") {
+        try {
+            # Get the disk information for the remote machine
+            $disk = Get-WmiObject -Class Win32_LogicalDisk -ComputerName $dnsName -Filter "DriveType=3" -ErrorAction Stop
+
+            # Output the machine name and disk information
+            Write-Host "Machine: $machineName ($dnsName)"
+            foreach ($diskPartition in $disk) {
+                $size = [math]::Round(($diskPartition.Size / 1GB), 2)
+                $freeSpace = [math]::Round(($diskPartition.FreeSpace / 1GB), 2)
+                $usedSpace = $size - $freeSpace
+                $percentFree = [math]::Round(($diskPartition.FreeSpace / $diskPartition.Size) * 100, 2)
+
+                Write-Host "`tDrive: $($diskPartition.DeviceID) Size: $size GB, Used: $usedSpace GB, Free: $freeSpace GB ($percentFree%)"
+            }
+        }
+        catch {
+            Write-Warning "Failed to retrieve disk information for $machineName ($dnsName): $($_.Exception.Message)"
+        }
+    }
+    else {
+        Write-Warning "$machineName ($dnsName) is powered off."
+    }
+}
